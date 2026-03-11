@@ -37,7 +37,6 @@ jobs:
               state: 'open'
             });
             console.log(`Found ${prs.data.length} open PR(s)`);
-            // Return as JSON string
             return JSON.stringify(prs.data.map(pr => ({
               number: pr.number,
               head: pr.head.sha,
@@ -49,13 +48,11 @@ jobs:
       # 4️⃣ Check PRs for conflicts safely
       - name: Check PRs for conflicts safely
         run: |
-          # Save GitHub-script output to a temp file
-          echo '${{ steps.open_prs.outputs.result }}' > pr_list.json
-          echo "Raw JSON saved to pr_list.json:"
-          cat pr_list.json
+          echo "Raw output from github-script:"
+          echo '${{ steps.open_prs.outputs.result }}'
 
-          # Read JSON safely using jq
-          jq -c '.[]' pr_list.json | while read pr; do
+          # Use jq 'fromjson' to parse the string correctly
+          echo '${{ steps.open_prs.outputs.result }}' | jq -c 'fromjson | .[]' | while read pr; do
             number=$(echo "$pr" | jq -r '.number')
             head_sha=$(echo "$pr" | jq -r '.head')
             base_sha=$(echo "$pr" | jq -r '.base')
