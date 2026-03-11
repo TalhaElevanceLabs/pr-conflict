@@ -21,7 +21,7 @@ jobs:
         uses: actions/github-script@v7
         id: open_prs
         with:
-          github-token: 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
+          github-token: ${{ secrets.GH_TOKEN }}
           script: |
             const prs = await github.rest.pulls.list({
               owner: context.repo.owner,
