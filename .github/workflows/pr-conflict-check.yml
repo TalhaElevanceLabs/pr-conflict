@@ -47,11 +47,13 @@ jobs:
 
       # 4️⃣ Check PRs for conflicts safely
       - name: Check PRs for conflicts safely
+        env:
+          BYOT_CHAT_WEBHOOK: ${{ secrets.BYOT_CHAT_WEBHOOK }}
         run: |
           echo "Raw output from github-script:"
           echo '${{ steps.open_prs.outputs.result }}'
 
-          # Use jq 'fromjson' to parse the string correctly
+          # Parse JSON string correctly
           echo '${{ steps.open_prs.outputs.result }}' | jq -c 'fromjson | .[]' | while read pr; do
             number=$(echo "$pr" | jq -r '.number')
             head_sha=$(echo "$pr" | jq -r '.head')
@@ -66,8 +68,8 @@ jobs:
               echo "Conflict detected in PR #$number!"
               echo "Sending message to BYOT CICD channel..."
               curl -X POST -H 'Content-Type: application/json' \
-                -d "{\"text\":\":warning: PR #$number by @$user has merge conflicts! \nPR Link: $url\"}" \
-                "https://chat.googleapis.com/v1/spaces/AAQAEpTbLTE/messages?key=AIzaSyDdI0hCZtE6vySjMm-WEfRq3CPzqKqqsHI&token=UsS_zXbCamHHsDZI9h0K6UTjr4vmFK1Q3S2DazCLC_Y"
+                -d "{\"text\":\"🚨 alert: PR #$number by @$user has merge conflicts! \nPR Link: $url\"}" \
+                "$BYOT_CHAT_WEBHOOK"
             else
               echo "No conflicts in PR #$number."
             fi
