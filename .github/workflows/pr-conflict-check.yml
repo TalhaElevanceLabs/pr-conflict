@@ -1,0 +1,61 @@
+name: PR Conflict Notifier
+
+on:
+  pull_request:
+    types: [closed]  # triggers when a PR is merged/closed
+
+jobs:
+  check-open-prs:
+    if: github.event.pull_request.merged == true  # only run if merged
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0  # need full history for merge-tree
+
+      - name: Fetch all branches
+        run: git fetch --all
+
+      - name: Get list of open PRs
+        uses: actions/github-script@v7
+        id: open_prs
+        with:
+          github-token: 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
+          script: |
+            const prs = await github.rest.pulls.list({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open'
+            });
+            return prs.data.map(pr => ({
+              number: pr.number,
+              head: pr.head.sha,       // use commit SHA for safety
+              base: pr.base.sha,
+              user: pr.user.login,
+              url: pr.html_url
+            }));
+
+      - name: Check PRs for conflicts safely
+        run: |
+          echo "${{ steps.open_prs.outputs.result }}" | jq -c '.[]' | while read pr; do
+            number=$(echo $pr | jq -r '.number')
+            head_sha=$(echo $pr | jq -r '.head')
+            base_sha=$(echo $pr | jq -r '.base')
+            user=$(echo $pr | jq -r '.user')
+            url=$(echo $pr | jq -r '.url')
+
+            echo "Checking PR #$number by @$user..."
+
+            # Perform a safe dry merge with git merge-tree (no working copy changes)
+            merge_output=$(git merge-tree $base_sha $base_sha $head_sha)
+
+            if echo "$merge_output" | grep -q "<<<<<<<"; then
+              echo "Conflict detected in PR #$number!"
+
+              # Send Google Chat notification
+              curl -X POST -H 'Content-Type: application/json' \
+                -d "{\"text\":\":warning: PR #$number by @$user has merge conflicts after the latest merge! \nPR Link: $url\"}" \
+                "https://chat.googleapis.com/v1/spaces/AAQAEpTbLTE/messages?key=AIzaSyDdI0hCZtE6vySjMm-WEfRq3CPzqKqqsHI&token=UsS_zXbCamHHsDZI9h0K6UTjr4vmFK1Q3S2DazCLC_Y"
+            fi
+          done
