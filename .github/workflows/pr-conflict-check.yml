@@ -13,15 +13,17 @@ jobs:
       pull-requests: read
 
     steps:
+      # 1️⃣ Checkout the repo
       - name: Checkout repo
         uses: actions/checkout@v3
         with:
-          fetch-depth: 0
+          fetch-depth: 0  # needed for git merge-tree
 
+      # 2️⃣ Fetch all branches
       - name: Fetch all branches
         run: git fetch --all
 
-      # 1️⃣ Get list of open PRs safely
+      # 3️⃣ Get list of open PRs using GITHUB_TOKEN
       - name: Get list of open PRs
         id: open_prs
         uses: actions/github-script@v7
@@ -35,7 +37,7 @@ jobs:
               state: 'open'
             });
             console.log(`Found ${prs.data.length} open PR(s)`);
-            // Return JSON as string so jq can parse it
+            // Return as JSON string so jq can parse it
             return JSON.stringify(prs.data.map(pr => ({
               number: pr.number,
               head: pr.head.sha,
@@ -44,10 +46,14 @@ jobs:
               url: pr.html_url
             })));
 
-      # 2️⃣ Check PRs for conflicts safely
+      # 4️⃣ Check PRs for conflicts safely
       - name: Check PRs for conflicts safely
         run: |
-          echo '${{ steps.open_prs.outputs.result }}' | jq -c '.[]' | while read pr; do
+          echo "Raw output from github-script:"
+          echo '${{ steps.open_prs.outputs.result }}'
+
+          # Unwrap JSON string and iterate
+          echo '${{ steps.open_prs.outputs.result }}' | jq -r 'fromjson | .[]' | while read pr; do
             number=$(echo "$pr" | jq -r '.number')
             head_sha=$(echo "$pr" | jq -r '.head')
             base_sha=$(echo "$pr" | jq -r '.base')
@@ -59,8 +65,11 @@ jobs:
 
             if echo "$merge_output" | grep -q "<<<<<<<"; then
               echo "Conflict detected in PR #$number!"
+              echo "Sending message to BYOT CICD channel..."
               curl -X POST -H 'Content-Type: application/json' \
                 -d "{\"text\":\":warning: PR #$number by @$user has merge conflicts! \nPR Link: $url\"}" \
                 "https://chat.googleapis.com/v1/spaces/AAQAEpTbLTE/messages?key=AIzaSyDdI0hCZtE6vySjMm-WEfRq3CPzqKqqsHI&token=UsS_zXbCamHHsDZI9h0K6UTjr4vmFK1Q3S2DazCLC_Y"
+            else
+              echo "No conflicts in PR #$number."
             fi
           done
