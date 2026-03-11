@@ -2,26 +2,29 @@ name: PR Conflict Notifier
 
 on:
   pull_request:
-    types: [closed]  # triggers when a PR is merged/closed
+    types: [closed] # triggers when a PR is merged/closed
 
 jobs:
   check-open-prs:
-    if: github.event.pull_request.merged == true  # only run if merged
+    if: github.event.pull_request.merged == true # only run if merged
     runs-on: ubuntu-latest
     steps:
+      # 1️⃣ Checkout repo
       - name: Checkout repo
         uses: actions/checkout@v3
         with:
-          fetch-depth: 0  # need full history for merge-tree
+          fetch-depth: 0 # need full history for merge-tree
 
+      # 2️⃣ Fetch all branches
       - name: Fetch all branches
         run: git fetch --all
 
+      # 3️⃣ Get list of open PRs using GitHub API
       - name: Get list of open PRs
         uses: actions/github-script@v7
         id: open_prs
         with:
-          github-token: ${{ secrets.GH_TOKEN }}
+          github-token: ${{ secrets.GH_TOKEN }} # must be stored as secret
           script: |
             const prs = await github.rest.pulls.list({
               owner: context.repo.owner,
@@ -30,12 +33,13 @@ jobs:
             });
             return prs.data.map(pr => ({
               number: pr.number,
-              head: pr.head.sha,       // use commit SHA for safety
+              head: pr.head.sha,       // commit SHA
               base: pr.base.sha,
               user: pr.user.login,
               url: pr.html_url
             }));
 
+      # 4️⃣ Check PRs for conflicts safely (no actual merges)
       - name: Check PRs for conflicts safely
         run: |
           echo "${{ steps.open_prs.outputs.result }}" | jq -c '.[]' | while read pr; do
@@ -47,7 +51,7 @@ jobs:
 
             echo "Checking PR #$number by @$user..."
 
-            # Perform a safe dry merge with git merge-tree (no working copy changes)
+            # Safe dry merge using merge-tree (no working copy changes)
             merge_output=$(git merge-tree $base_sha $base_sha $head_sha)
 
             if echo "$merge_output" | grep -q "<<<<<<<"; then
